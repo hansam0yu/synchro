@@ -17,4 +17,9 @@ export interface Task {
     color: string;
   }
   
-  export type Page = 'tasks' | 'calendar' | 'timetable';
+  export interface User {
+  id: string;
+  email: string;
+}
+
+export type Page = 'tasks' | 'calendar' | 'timetable';
