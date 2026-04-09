@@ -14,12 +14,9 @@ function loadLocal<T>(key: string, fallback: T): T {
 export function useData(user: User | null) {
   const [tasks, setTasksState] = useState<Task[]>([]);
   const [events, setEventsState] = useState<Record<string, CalEvent[]>>({});
-  const [timetable, setTimetableState] = useState<Record<string, TTBlock[]>>(
-    {},
-  );
+  const [timetable, setTimetableState] = useState<Record<string, TTBlock[]>>({});
   const [loading, setLoading] = useState(true);
 
-  // Load data when user state changes
   useEffect(() => {
     if (user) {
       loadFromSupabase();
@@ -29,55 +26,79 @@ export function useData(user: User | null) {
       setTimetableState(loadLocal("synchro-tt", {}));
       setLoading(false);
     }
-  }, [user]);
+  }, [user?.id]);
 
   const loadFromSupabase = async () => {
     setLoading(true);
-    const [{ data: taskData }, { data: eventData }, { data: ttData }] =
-      await Promise.all([
-        supabase
-          .from("tasks")
-          .select("*")
-          .order("created_at", { ascending: false }),
+    try {
+      const [
+        { data: taskData, error: taskError },
+        { data: eventData, error: eventError },
+        { data: ttData, error: ttError },
+      ] = await Promise.all([
+        supabase.from("tasks").select("*").order("created_at", { ascending: false }),
         supabase.from("events").select("*"),
         supabase.from("timetable_blocks").select("*"),
       ]);
 
-    if (taskData) setTasksState(taskData);
+      if (taskError) console.error("Error loading tasks:", taskError);
+      if (eventError) console.error("Error loading events:", eventError);
+      if (ttError) console.error("Error loading timetable:", ttError);
 
-    // Convert flat event rows into the Record<dateStr, CalEvent[]> shape
-    if (eventData) {
-      const grouped: Record<string, CalEvent[]> = {};
-      eventData.forEach((e) => {
-        if (!grouped[e.date]) grouped[e.date] = [];
-        grouped[e.date].push({ id: e.id, name: e.name, time: e.time });
-      });
-      setEventsState(grouped);
+      if (taskData) {
+        setTasksState(
+          taskData.map((t) => ({ id: t.id, title: t.title, due: t.due ?? "", done: t.done }))
+        );
+      }
+
+      if (eventData) {
+        const grouped: Record<string, CalEvent[]> = {};
+        eventData.forEach((e) => {
+          if (!grouped[e.date]) grouped[e.date] = [];
+          grouped[e.date].push({ id: e.id, name: e.name, time: e.time ?? "" });
+        });
+        setEventsState(grouped);
+      }
+
+      if (ttData) {
+        const grouped: Record<string, TTBlock[]> = {};
+        ttData.forEach((b) => {
+          const key = `${b.day_index}-${b.time_slot}`;
+          if (!grouped[key]) grouped[key] = [];
+          grouped[key].push({ id: b.id, name: b.name, color: b.color });
+        });
+        setTimetableState(grouped);
+      }
+    } catch (err) {
+      console.error("Unexpected error loading data:", err);
+    } finally {
+      setLoading(false);
     }
-
-    // Convert flat timetable rows into Record<key, TTBlock[]> shape
-    if (ttData) {
-      const grouped: Record<string, TTBlock[]> = {};
-      ttData.forEach((b) => {
-        const key = `${b.day_index}-${b.time_slot}`;
-        if (!grouped[key]) grouped[key] = [];
-        grouped[key].push({ id: b.id, name: b.name, color: b.color });
-      });
-      setTimetableState(grouped);
-    }
-
-    setLoading(false);
   };
 
   /* ── Task handlers ── */
   const addTask = async (title: string, due: string) => {
     if (user) {
-      const { data } = await supabase
+      const tempId = Date.now();
+      setTasksState((prev) => [{ id: tempId, title, due, done: false }, ...prev]);
+
+      const { data, error } = await supabase
         .from("tasks")
-        .insert({ user_id: user.id, title, due, done: false })
+        .insert({ user_id: user.id, title, due: due || null, done: false })
         .select()
         .single();
-      if (data) setTasksState((prev) => [data, ...prev]);
+
+      if (error) {
+        console.error("Failed to add task:", error);
+      } else if (data) {
+        setTasksState((prev) =>
+          prev.map((t) =>
+            t.id === tempId
+              ? { id: data.id, title: data.title, due: data.due ?? "", done: data.done }
+              : t
+          )
+        );
+      }
     } else {
       const t: Task = { id: Date.now(), title, due, done: false };
       setTasksState((prev) => {
@@ -91,55 +112,70 @@ export function useData(user: User | null) {
   const toggleTask = async (id: number) => {
     const task = tasks.find((t) => t.id === id);
     if (!task) return;
-    if (user) {
-      await supabase.from("tasks").update({ done: !task.done }).eq("id", id);
-    }
+    const newDone = !task.done;
+
     setTasksState((prev) => {
-      const updated = prev.map((t) =>
-        t.id === id ? { ...t, done: !t.done } : t,
-      );
+      const updated = prev.map((t) => (t.id === id ? { ...t, done: newDone } : t));
       if (!user) localStorage.setItem("synchro-tasks", JSON.stringify(updated));
       return updated;
     });
+
+    if (user) {
+      const { error } = await supabase
+        .from("tasks")
+        .update({ done: newDone })
+        .eq("id", id);
+      if (error) console.error("Failed to toggle task:", error);
+    }
   };
 
   const deleteTask = async (id: number) => {
-    if (user) await supabase.from("tasks").delete().eq("id", id);
     setTasksState((prev) => {
       const updated = prev.filter((t) => t.id !== id);
       if (!user) localStorage.setItem("synchro-tasks", JSON.stringify(updated));
       return updated;
     });
+
+    if (user) {
+      const { error } = await supabase.from("tasks").delete().eq("id", id);
+      if (error) console.error("Failed to delete task:", error);
+    }
   };
 
   /* ── Calendar handlers ── */
   const addEvent = async (dateStr: string, name: string, time: string) => {
     if (user) {
-      const { data } = await supabase
+      const tempId = Date.now();
+      setEventsState((prev) => ({
+        ...prev,
+        [dateStr]: [...(prev[dateStr] || []), { id: tempId, name, time }].sort((a, b) =>
+          (a.time || "").localeCompare(b.time || "")
+        ),
+      }));
+
+      const { data, error } = await supabase
         .from("events")
-        .insert({ user_id: user.id, date: dateStr, name, time })
+        .insert({ user_id: user.id, date: dateStr, name, time: time || null })
         .select()
         .single();
-      if (data) {
-        setEventsState((prev) => {
-          const updated = {
-            ...prev,
-            [dateStr]: [
-              ...(prev[dateStr] || []),
-              { id: data.id, name, time },
-            ].sort((a, b) => a.time.localeCompare(b.time)),
-          };
-          return updated;
-        });
+
+      if (error) {
+        console.error("Failed to add event:", error);
+      } else if (data) {
+        setEventsState((prev) => ({
+          ...prev,
+          [dateStr]: (prev[dateStr] || []).map((e) =>
+            e.id === tempId ? { id: data.id, name: data.name, time: data.time ?? "" } : e
+          ),
+        }));
       }
     } else {
       setEventsState((prev) => {
         const updated = {
           ...prev,
-          [dateStr]: [
-            ...(prev[dateStr] || []),
-            { id: Date.now(), name, time },
-          ].sort((a, b) => a.time.localeCompare(b.time)),
+          [dateStr]: [...(prev[dateStr] || []), { id: Date.now(), name, time }].sort((a, b) =>
+            (a.time || "").localeCompare(b.time || "")
+          ),
         };
         localStorage.setItem("synchro-events", JSON.stringify(updated));
         return updated;
@@ -148,23 +184,33 @@ export function useData(user: User | null) {
   };
 
   const deleteEvent = async (dateStr: string, id: number) => {
-    if (user) await supabase.from("events").delete().eq("id", id);
     setEventsState((prev) => {
       const updated = {
         ...prev,
         [dateStr]: (prev[dateStr] || []).filter((e) => e.id !== id),
       };
-      if (!user)
-        localStorage.setItem("synchro-events", JSON.stringify(updated));
+      if (!user) localStorage.setItem("synchro-events", JSON.stringify(updated));
       return updated;
     });
+
+    if (user) {
+      const { error } = await supabase.from("events").delete().eq("id", id);
+      if (error) console.error("Failed to delete event:", error);
+    }
   };
 
   /* ── Timetable handlers ── */
   const addBlock = async (key: string, name: string, color: string) => {
     const [dayIndex, timeSlot] = key.split(/-(.+)/);
+
     if (user) {
-      const { data } = await supabase
+      const tempId = Date.now();
+      setTimetableState((prev) => ({
+        ...prev,
+        [key]: [...(prev[key] || []), { id: tempId, name, color }],
+      }));
+
+      const { data, error } = await supabase
         .from("timetable_blocks")
         .insert({
           user_id: user.id,
@@ -175,10 +221,15 @@ export function useData(user: User | null) {
         })
         .select()
         .single();
-      if (data) {
+
+      if (error) {
+        console.error("Failed to add block:", error);
+      } else if (data) {
         setTimetableState((prev) => ({
           ...prev,
-          [key]: [...(prev[key] || []), { id: data.id, name, color }],
+          [key]: (prev[key] || []).map((b) =>
+            b.id === tempId ? { id: data.id, name: data.name, color: data.color } : b
+          ),
         }));
       }
     } else {
@@ -194,7 +245,6 @@ export function useData(user: User | null) {
   };
 
   const deleteBlock = async (key: string, id: number) => {
-    if (user) await supabase.from("timetable_blocks").delete().eq("id", id);
     setTimetableState((prev) => {
       const updated = {
         ...prev,
@@ -203,6 +253,11 @@ export function useData(user: User | null) {
       if (!user) localStorage.setItem("synchro-tt", JSON.stringify(updated));
       return updated;
     });
+
+    if (user) {
+      const { error } = await supabase.from("timetable_blocks").delete().eq("id", id);
+      if (error) console.error("Failed to delete block:", error);
+    }
   };
 
   return {
