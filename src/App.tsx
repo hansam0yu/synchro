@@ -14,12 +14,15 @@ export default function App() {
   const { user, loading: authLoading, signIn, signUp, signOut } = useAuth();
   const {
     tasks,
+    categories,
     events,
     timetable,
     loading: dataLoading,
     addTask,
     toggleTask,
     deleteTask,
+    addCategory,
+    deleteCategory,
     addEvent,
     deleteEvent,
     addBlock,
@@ -47,9 +50,12 @@ export default function App() {
         {page === "tasks" && (
           <Tasks
             tasks={tasks}
+            categories={categories}
             onAdd={addTask}
             onToggle={toggleTask}
             onDelete={deleteTask}
+            onAddCategory={addCategory}
+            onDeleteCategory={deleteCategory}
           />
         )}
         {page === "calendar" && (
