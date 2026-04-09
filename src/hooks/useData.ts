@@ -92,7 +92,7 @@ export function useData(user: User | null) {
             dayIndex: b.day_index,
             startTime: b.start_time,
             endTime: b.end_time,
-          }))
+          })),
         );
       }
     } catch (err) {
@@ -310,7 +310,7 @@ export function useData(user: User | null) {
     startTime: string,
     endTime: string,
     name: string,
-    color: string
+    color: string,
   ) => {
     if (user) {
       const tempId = Date.now();
@@ -346,8 +346,8 @@ export function useData(user: User | null) {
                   startTime: data.start_time,
                   endTime: data.end_time,
                 }
-              : b
-          )
+              : b,
+          ),
         );
       }
     } else {

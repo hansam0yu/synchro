@@ -1,32 +1,61 @@
-import { useState, useRef, useEffect } from 'react';
-import type { KeyboardEvent } from 'react';
-import type { TTBlock } from '../Types.ts';
+import { useState, useRef, useEffect } from "react";
+import type { KeyboardEvent } from "react";
+import type { TTBlock } from "../Types.ts";
 
 interface TimetableProps {
   timetable: TTBlock[];
-  onAddBlock: (dayIndex: number, startTime: string, endTime: string, name: string, color: string) => void;
+  onAddBlock: (
+    dayIndex: number,
+    startTime: string,
+    endTime: string,
+    name: string,
+    color: string,
+  ) => void;
   onDeleteBlock: (id: number) => void;
 }
 
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const TIMES = [
-  '6:00','7:00','8:00','9:00','10:00','11:00','12:00',
-  '13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00'
+  "6:00",
+  "7:00",
+  "8:00",
+  "9:00",
+  "10:00",
+  "11:00",
+  "12:00",
+  "13:00",
+  "14:00",
+  "15:00",
+  "16:00",
+  "17:00",
+  "18:00",
+  "19:00",
+  "20:00",
+  "21:00",
+  "22:00",
 ];
-const COLORS = ['#3d6b4f','#2563eb','#9333ea','#ea580c','#be185d','#0891b2','#b45309'];
+const COLORS = [
+  "#3d6b4f",
+  "#2563eb",
+  "#9333ea",
+  "#ea580c",
+  "#be185d",
+  "#0891b2",
+  "#b45309",
+];
 
-function hexToRgba(hex: string, alpha: number): string {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
-export default function Timetable({ timetable, onAddBlock, onDeleteBlock }: TimetableProps) {
-  const [pendingCell, setPendingCell] = useState<{ dayIndex: number; time: string } | null>(null);
-  const [actName, setActName] = useState('');
-  const [startTime, setStartTime] = useState('');
-  const [endTime, setEndTime] = useState('');
+export default function Timetable({
+  timetable,
+  onAddBlock,
+  onDeleteBlock,
+}: TimetableProps) {
+  const [pendingCell, setPendingCell] = useState<{
+    dayIndex: number;
+    time: string;
+  } | null>(null);
+  const [actName, setActName] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -42,7 +71,7 @@ export default function Timetable({ timetable, onAddBlock, onDeleteBlock }: Time
 
   const openModal = (dayIndex: number, time: string) => {
     setPendingCell({ dayIndex, time });
-    setActName('');
+    setActName("");
     setStartTime(time);
     // Default end time to 1 hour later
     const timeIdx = TIMES.indexOf(time);
@@ -54,13 +83,19 @@ export default function Timetable({ timetable, onAddBlock, onDeleteBlock }: Time
 
   const confirm = () => {
     if (!actName.trim() || !pendingCell) return;
-    onAddBlock(pendingCell.dayIndex, startTime, endTime, actName.trim(), selectedColor);
+    onAddBlock(
+      pendingCell.dayIndex,
+      startTime,
+      endTime,
+      actName.trim(),
+      selectedColor,
+    );
     closeModal();
   };
 
   const handleKey = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') confirm();
-    if (e.key === 'Escape') closeModal();
+    if (e.key === "Enter") confirm();
+    if (e.key === "Escape") closeModal();
   };
 
   return (
@@ -77,7 +112,9 @@ export default function Timetable({ timetable, onAddBlock, onDeleteBlock }: Time
               <tr>
                 <th style={{ width: 50 }}></th>
                 {DAYS.map((d, i) => (
-                  <th key={d} className={i === todayIdx ? 'today-col' : ''}>{d}</th>
+                  <th key={d} className={i === todayIdx ? "today-col" : ""}>
+                    {d}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -87,7 +124,7 @@ export default function Timetable({ timetable, onAddBlock, onDeleteBlock }: Time
                   <td className="tt-time">{time}</td>
                   {DAYS.map((_, di) => {
                     // Check if this cell is occupied by a block starting earlier
-                    const blockInCell = timetable.find(b => {
+                    const blockInCell = timetable.find((b) => {
                       if (b.dayIndex !== di) return false;
                       const startIdx = TIMES.indexOf(b.startTime);
                       const endIdx = TIMES.indexOf(b.endTime);
@@ -119,10 +156,15 @@ export default function Timetable({ timetable, onAddBlock, onDeleteBlock }: Time
                             className="tt-block"
                             style={{ background: blockInCell.color }}
                           >
-                            <span className="tt-block-name">{blockInCell.name}</span>
+                            <span className="tt-block-name">
+                              {blockInCell.name}
+                            </span>
                             <button
                               className="tt-block-del"
-                              onClick={e => { e.stopPropagation(); onDeleteBlock(blockInCell.id); }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDeleteBlock(blockInCell.id);
+                              }}
                             >
                               ✕
                             </button>
@@ -142,8 +184,10 @@ export default function Timetable({ timetable, onAddBlock, onDeleteBlock }: Time
 
       {/* Modal */}
       <div
-        className={`modal-bg ${pendingCell ? 'open' : ''}`}
-        onClick={e => { if (e.target === e.currentTarget) closeModal(); }}
+        className={`modal-bg ${pendingCell ? "open" : ""}`}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) closeModal();
+        }}
       >
         <div className="modal">
           <div className="modal-title">Add activity</div>
@@ -153,26 +197,36 @@ export default function Timetable({ timetable, onAddBlock, onDeleteBlock }: Time
               ref={inputRef}
               type="text"
               value={actName}
-              onChange={e => setActName(e.target.value)}
+              onChange={(e) => setActName(e.target.value)}
               onKeyDown={handleKey}
               placeholder="e.g. Gym, Study, Lunch…"
-              style={{ width: '100%' }}
+              style={{ width: "100%" }}
             />
           </div>
           <div className="form-row" style={{ marginBottom: 12 }}>
             <div className="form-group">
               <label className="form-label">Start time</label>
-              <select value={startTime} onChange={e => setStartTime(e.target.value)}>
-                {TIMES.map(t => (
-                  <option key={t} value={t}>{t}</option>
+              <select
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+              >
+                {TIMES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
                 ))}
               </select>
             </div>
             <div className="form-group">
               <label className="form-label">End time</label>
-              <select value={endTime} onChange={e => setEndTime(e.target.value)}>
-                {TIMES.map(t => (
-                  <option key={t} value={t}>{t}</option>
+              <select
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+              >
+                {TIMES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
                 ))}
               </select>
             </div>
@@ -180,10 +234,10 @@ export default function Timetable({ timetable, onAddBlock, onDeleteBlock }: Time
           <div className="form-group">
             <label className="form-label">Colour</label>
             <div className="color-picker">
-              {COLORS.map(c => (
+              {COLORS.map((c) => (
                 <div
                   key={c}
-                  className={`color-dot ${c === selectedColor ? 'selected' : ''}`}
+                  className={`color-dot ${c === selectedColor ? "selected" : ""}`}
                   style={{ background: c }}
                   onClick={() => setSelectedColor(c)}
                 />
@@ -191,8 +245,12 @@ export default function Timetable({ timetable, onAddBlock, onDeleteBlock }: Time
             </div>
           </div>
           <div className="modal-actions">
-            <button className="btn btn-ghost" onClick={closeModal}>Cancel</button>
-            <button className="btn btn-primary" onClick={confirm}>Add</button>
+            <button className="btn btn-ghost" onClick={closeModal}>
+              Cancel
+            </button>
+            <button className="btn btn-primary" onClick={confirm}>
+              Add
+            </button>
           </div>
         </div>
       </div>
