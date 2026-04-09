@@ -4,6 +4,15 @@
 -- Enable Row Level Security
 -- This ensures users can only access their own data
 
+-- Categories table (must be created before tasks so tasks can reference it)
+CREATE TABLE IF NOT EXISTS categories (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  color TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Tasks table
 CREATE TABLE IF NOT EXISTS tasks (
   id BIGSERIAL PRIMARY KEY,
@@ -11,6 +20,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   title TEXT NOT NULL,
   due DATE,
   done BOOLEAN DEFAULT FALSE,
+  category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -94,9 +104,31 @@ CREATE POLICY "Users can delete their own timetable blocks"
   ON timetable_blocks FOR DELETE
   USING (auth.uid() = user_id);
 
+-- Enable Row Level Security for categories
+ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies for categories
+CREATE POLICY "Users can view their own categories"
+  ON categories FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own categories"
+  ON categories FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own categories"
+  ON categories FOR UPDATE
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own categories"
+  ON categories FOR DELETE
+  USING (auth.uid() = user_id);
+
 -- Indexes for better performance
+CREATE INDEX IF NOT EXISTS categories_user_id_idx ON categories(user_id);
 CREATE INDEX IF NOT EXISTS tasks_user_id_idx ON tasks(user_id);
 CREATE INDEX IF NOT EXISTS tasks_due_idx ON tasks(due);
+CREATE INDEX IF NOT EXISTS tasks_category_id_idx ON tasks(category_id);
 CREATE INDEX IF NOT EXISTS calendar_events_user_id_idx ON calendar_events(user_id);
 CREATE INDEX IF NOT EXISTS calendar_events_date_idx ON calendar_events(date);
 CREATE INDEX IF NOT EXISTS timetable_blocks_user_id_idx ON timetable_blocks(user_id);

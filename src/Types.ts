@@ -1,8 +1,15 @@
+export interface Category {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface Task {
     id: number;
     title: string;
     due: string;
     done: boolean;
+    categoryId: string;
   }
   
   export interface CalEvent {

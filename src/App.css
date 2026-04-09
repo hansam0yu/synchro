@@ -150,6 +150,142 @@ input:focus, textarea:focus, select:focus { border-color: var(--accent); }
 
 .empty-state { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
 
+/* Tasks two-column layout */
+.tasks-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  max-width: 940px;
+  margin: 0 auto;
+}
+
+.tasks-main {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Category panel (right sidebar) */
+.tasks-cat-panel {
+  width: 230px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.btn-new-category {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  width: 100%;
+  text-align: left;
+  transition: opacity 0.15s;
+}
+
+.btn-new-category:hover { opacity: 0.75; }
+
+/* New category form (inside panel) */
+.new-category-form {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+/* Category filter list */
+.cat-filter-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.cat-filter-item-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.cat-filter-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  padding: 6px 8px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text);
+  text-align: left;
+  transition: background 0.15s;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.cat-filter-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cat-filter-item:hover { background: var(--surface2); }
+
+.cat-filter-item.active {
+  background: var(--surface2);
+  font-weight: 500;
+}
+
+.cat-filter-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cat-filter-del {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 4px 5px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  width: 26px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.cat-filter-del:hover {
+  color: var(--danger);
+  background: var(--danger-light);
+}
+
+.cat-filter-del-spacer {
+  display: block;
+  width: 26px;
+  flex-shrink: 0;
+}
+
+/* Task category pill (in task list) */
+.task-cat-pill {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 /* Tasks */
 .task-item {
   display: flex; align-items: center; gap: 12px;

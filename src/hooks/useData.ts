@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
-import type { Task, CalEvent, TTBlock, User } from "../Types";
+import type { Task, CalEvent, TTBlock, User, Category } from "../Types";
 
 function loadLocal<T>(key: string, fallback: T): T {
   try {
@@ -13,14 +13,18 @@ function loadLocal<T>(key: string, fallback: T): T {
 
 export function useData(user: User | null) {
   const [tasks, setTasksState] = useState<Task[]>([]);
+  const [categories, setCategoriesState] = useState<Category[]>([]);
   const [events, setEventsState] = useState<Record<string, CalEvent[]>>({});
-  const [timetable, setTimetableState] = useState<Record<string, TTBlock[]>>({});
+  const [timetable, setTimetableState] = useState<Record<string, TTBlock[]>>(
+    {},
+  );
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (user) {
       loadFromSupabase();
     } else {
+      setCategoriesState(loadLocal<Category[]>("synchro-categories", []));
       setTasksState(loadLocal("synchro-tasks", []));
       setEventsState(loadLocal("synchro-events", {}));
       setTimetableState(loadLocal("synchro-tt", {}));
@@ -32,22 +36,43 @@ export function useData(user: User | null) {
     setLoading(true);
     try {
       const [
+        { data: catData, error: catError },
         { data: taskData, error: taskError },
         { data: eventData, error: eventError },
         { data: ttData, error: ttError },
       ] = await Promise.all([
-        supabase.from("tasks").select("*").order("created_at", { ascending: false }),
+        supabase
+          .from("categories")
+          .select("*")
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("tasks")
+          .select("*")
+          .order("created_at", { ascending: false }),
         supabase.from("events").select("*"),
         supabase.from("timetable_blocks").select("*"),
       ]);
 
+      if (catError) console.error("Error loading categories:", catError);
       if (taskError) console.error("Error loading tasks:", taskError);
       if (eventError) console.error("Error loading events:", eventError);
       if (ttError) console.error("Error loading timetable:", ttError);
 
+      if (catData) {
+        setCategoriesState(
+          catData.map((c) => ({ id: c.id, name: c.name, color: c.color })),
+        );
+      }
+
       if (taskData) {
         setTasksState(
-          taskData.map((t) => ({ id: t.id, title: t.title, due: t.due ?? "", done: t.done }))
+          taskData.map((t) => ({
+            id: t.id,
+            title: t.title,
+            due: t.due ?? "",
+            done: t.done,
+            categoryId: t.category_id ?? "general",
+          })),
         );
       }
 
@@ -76,15 +101,82 @@ export function useData(user: User | null) {
     }
   };
 
+  /* ── Category handlers ── */
+  const addCategory = async (name: string, color: string) => {
+    if (user) {
+      const { data, error } = await supabase
+        .from("categories")
+        .insert({ user_id: user.id, name, color })
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Failed to add category:", error);
+      } else if (data) {
+        setCategoriesState((prev) => [
+          ...prev,
+          { id: data.id, name: data.name, color: data.color },
+        ]);
+      }
+    } else {
+      const newCat: Category = { id: `cat-${Date.now()}`, name, color };
+      setCategoriesState((prev) => {
+        const updated = [...prev, newCat];
+        localStorage.setItem("synchro-categories", JSON.stringify(updated));
+        return updated;
+      });
+    }
+  };
+
+  const deleteCategory = async (id: string) => {
+    if (user) {
+      // Optimistically update UI (DB handles task category_id via ON DELETE SET NULL)
+      setCategoriesState((prev) => prev.filter((c) => c.id !== id));
+      setTasksState((prev) =>
+        prev.map((t) =>
+          t.categoryId === id ? { ...t, categoryId: "general" } : t,
+        ),
+      );
+      const { error } = await supabase.from("categories").delete().eq("id", id);
+      if (error) console.error("Failed to delete category:", error);
+    } else {
+      setTasksState((prev) => {
+        const updated = prev.map((t) =>
+          t.categoryId === id ? { ...t, categoryId: "general" } : t,
+        );
+        localStorage.setItem("synchro-tasks", JSON.stringify(updated));
+        return updated;
+      });
+      setCategoriesState((prev) => {
+        const updated = prev.filter((c) => c.id !== id);
+        localStorage.setItem("synchro-categories", JSON.stringify(updated));
+        return updated;
+      });
+    }
+  };
+
   /* ── Task handlers ── */
-  const addTask = async (title: string, due: string) => {
+  const addTask = async (
+    title: string,
+    due: string,
+    categoryId: string = "general",
+  ) => {
     if (user) {
       const tempId = Date.now();
-      setTasksState((prev) => [{ id: tempId, title, due, done: false }, ...prev]);
+      setTasksState((prev) => [
+        { id: tempId, title, due, done: false, categoryId },
+        ...prev,
+      ]);
 
       const { data, error } = await supabase
         .from("tasks")
-        .insert({ user_id: user.id, title, due: due || null, done: false })
+        .insert({
+          user_id: user.id,
+          title,
+          due: due || null,
+          done: false,
+          category_id: categoryId !== "general" ? categoryId : null,
+        })
         .select()
         .single();
 
@@ -94,13 +186,19 @@ export function useData(user: User | null) {
         setTasksState((prev) =>
           prev.map((t) =>
             t.id === tempId
-              ? { id: data.id, title: data.title, due: data.due ?? "", done: data.done }
-              : t
-          )
+              ? {
+                  id: data.id,
+                  title: data.title,
+                  due: data.due ?? "",
+                  done: data.done,
+                  categoryId,
+                }
+              : t,
+          ),
         );
       }
     } else {
-      const t: Task = { id: Date.now(), title, due, done: false };
+      const t: Task = { id: Date.now(), title, due, done: false, categoryId };
       setTasksState((prev) => {
         const updated = [t, ...prev];
         localStorage.setItem("synchro-tasks", JSON.stringify(updated));
@@ -115,7 +213,9 @@ export function useData(user: User | null) {
     const newDone = !task.done;
 
     setTasksState((prev) => {
-      const updated = prev.map((t) => (t.id === id ? { ...t, done: newDone } : t));
+      const updated = prev.map((t) =>
+        t.id === id ? { ...t, done: newDone } : t,
+      );
       if (!user) localStorage.setItem("synchro-tasks", JSON.stringify(updated));
       return updated;
     });
@@ -148,8 +248,8 @@ export function useData(user: User | null) {
       const tempId = Date.now();
       setEventsState((prev) => ({
         ...prev,
-        [dateStr]: [...(prev[dateStr] || []), { id: tempId, name, time }].sort((a, b) =>
-          (a.time || "").localeCompare(b.time || "")
+        [dateStr]: [...(prev[dateStr] || []), { id: tempId, name, time }].sort(
+          (a, b) => (a.time || "").localeCompare(b.time || ""),
         ),
       }));
 
@@ -165,7 +265,9 @@ export function useData(user: User | null) {
         setEventsState((prev) => ({
           ...prev,
           [dateStr]: (prev[dateStr] || []).map((e) =>
-            e.id === tempId ? { id: data.id, name: data.name, time: data.time ?? "" } : e
+            e.id === tempId
+              ? { id: data.id, name: data.name, time: data.time ?? "" }
+              : e,
           ),
         }));
       }
@@ -173,9 +275,10 @@ export function useData(user: User | null) {
       setEventsState((prev) => {
         const updated = {
           ...prev,
-          [dateStr]: [...(prev[dateStr] || []), { id: Date.now(), name, time }].sort((a, b) =>
-            (a.time || "").localeCompare(b.time || "")
-          ),
+          [dateStr]: [
+            ...(prev[dateStr] || []),
+            { id: Date.now(), name, time },
+          ].sort((a, b) => (a.time || "").localeCompare(b.time || "")),
         };
         localStorage.setItem("synchro-events", JSON.stringify(updated));
         return updated;
@@ -189,7 +292,8 @@ export function useData(user: User | null) {
         ...prev,
         [dateStr]: (prev[dateStr] || []).filter((e) => e.id !== id),
       };
-      if (!user) localStorage.setItem("synchro-events", JSON.stringify(updated));
+      if (!user)
+        localStorage.setItem("synchro-events", JSON.stringify(updated));
       return updated;
     });
 
@@ -228,7 +332,9 @@ export function useData(user: User | null) {
         setTimetableState((prev) => ({
           ...prev,
           [key]: (prev[key] || []).map((b) =>
-            b.id === tempId ? { id: data.id, name: data.name, color: data.color } : b
+            b.id === tempId
+              ? { id: data.id, name: data.name, color: data.color }
+              : b,
           ),
         }));
       }
@@ -255,19 +361,25 @@ export function useData(user: User | null) {
     });
 
     if (user) {
-      const { error } = await supabase.from("timetable_blocks").delete().eq("id", id);
+      const { error } = await supabase
+        .from("timetable_blocks")
+        .delete()
+        .eq("id", id);
       if (error) console.error("Failed to delete block:", error);
     }
   };
 
   return {
     tasks,
+    categories,
     events,
     timetable,
     loading,
     addTask,
     toggleTask,
     deleteTask,
+    addCategory,
+    deleteCategory,
     addEvent,
     deleteEvent,
     addBlock,
