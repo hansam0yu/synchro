@@ -114,6 +114,27 @@ select {
   color: var(--text);
   outline: none;
   transition: border-color 0.15s;
+  height: 37px;
+}
+
+select {
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237a7872' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 16px;
+  padding-right: 32px;
+  cursor: pointer;
+}
+
+textarea {
+  height: auto;
+  min-height: 80px;
 }
 
 input:focus, textarea:focus, select:focus { border-color: var(--accent); }
@@ -431,9 +452,10 @@ input:focus, textarea:focus, select:focus { border-color: var(--accent); }
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   min-width: 100px;
-  min-height: 60px;
+  height: 60px;
   cursor: pointer;
   transition: background 0.1s;
+  position: relative;
 }
 
 .tt-cell:hover { background: var(--accent-light); }
@@ -446,6 +468,7 @@ input:focus, textarea:focus, select:focus { border-color: var(--accent); }
   width: 50px;
   vertical-align: top;
   border-bottom: 1px solid var(--border);
+  border-right: 2px solid var(--border);
 }
 
 .tt-block {
@@ -453,11 +476,12 @@ input:focus, textarea:focus, select:focus { border-color: var(--accent); }
   border-radius: 4px;
   padding: 4px 6px;
   font-size: 11px;
-  margin-bottom: 3px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 4px;
+  box-sizing: border-box;
+  margin-bottom: 3px;
 }
 
 .tt-block-name {
@@ -475,8 +499,11 @@ input:focus, textarea:focus, select:focus { border-color: var(--accent); }
 .tt-block-del:hover { color: white; }
 
 .tt-add-btn {
-  font-size: 18px; color: rgba(0,0,0,0.15);
-  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+  color: rgba(0,0,0,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   min-height: 50px;
 }
 

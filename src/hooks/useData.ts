@@ -15,9 +15,7 @@ export function useData(user: User | null) {
   const [tasks, setTasksState] = useState<Task[]>([]);
   const [categories, setCategoriesState] = useState<Category[]>([]);
   const [events, setEventsState] = useState<Record<string, CalEvent[]>>({});
-  const [timetable, setTimetableState] = useState<Record<string, TTBlock[]>>(
-    {},
-  );
+  const [timetable, setTimetableState] = useState<TTBlock[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -27,7 +25,7 @@ export function useData(user: User | null) {
       setCategoriesState(loadLocal<Category[]>("synchro-categories", []));
       setTasksState(loadLocal("synchro-tasks", []));
       setEventsState(loadLocal("synchro-events", {}));
-      setTimetableState(loadLocal("synchro-tt", {}));
+      setTimetableState(loadLocal<TTBlock[]>("synchro-tt", []));
       setLoading(false);
     }
   }, [user?.id]);
@@ -86,13 +84,16 @@ export function useData(user: User | null) {
       }
 
       if (ttData) {
-        const grouped: Record<string, TTBlock[]> = {};
-        ttData.forEach((b) => {
-          const key = `${b.day_index}-${b.time_slot}`;
-          if (!grouped[key]) grouped[key] = [];
-          grouped[key].push({ id: b.id, name: b.name, color: b.color });
-        });
-        setTimetableState(grouped);
+        setTimetableState(
+          ttData.map((b) => ({
+            id: b.id,
+            name: b.name,
+            color: b.color,
+            dayIndex: b.day_index,
+            startTime: b.start_time,
+            endTime: b.end_time,
+          }))
+        );
       }
     } catch (err) {
       console.error("Unexpected error loading data:", err);
@@ -191,7 +192,7 @@ export function useData(user: User | null) {
                   title: data.title,
                   due: data.due ?? "",
                   done: data.done,
-                  categoryId,
+                  categoryId: data.category_id ?? "general",
                 }
               : t,
           ),
@@ -304,22 +305,27 @@ export function useData(user: User | null) {
   };
 
   /* ── Timetable handlers ── */
-  const addBlock = async (key: string, name: string, color: string) => {
-    const [dayIndex, timeSlot] = key.split(/-(.+)/);
-
+  const addBlock = async (
+    dayIndex: number,
+    startTime: string,
+    endTime: string,
+    name: string,
+    color: string
+  ) => {
     if (user) {
       const tempId = Date.now();
-      setTimetableState((prev) => ({
+      setTimetableState((prev) => [
         ...prev,
-        [key]: [...(prev[key] || []), { id: tempId, name, color }],
-      }));
+        { id: tempId, name, color, dayIndex, startTime, endTime },
+      ]);
 
       const { data, error } = await supabase
         .from("timetable_blocks")
         .insert({
           user_id: user.id,
-          day_index: parseInt(dayIndex),
-          time_slot: timeSlot,
+          day_index: dayIndex,
+          start_time: startTime,
+          end_time: endTime,
           name,
           color,
         })
@@ -329,33 +335,41 @@ export function useData(user: User | null) {
       if (error) {
         console.error("Failed to add block:", error);
       } else if (data) {
-        setTimetableState((prev) => ({
-          ...prev,
-          [key]: (prev[key] || []).map((b) =>
+        setTimetableState((prev) =>
+          prev.map((b) =>
             b.id === tempId
-              ? { id: data.id, name: data.name, color: data.color }
-              : b,
-          ),
-        }));
+              ? {
+                  id: data.id,
+                  name: data.name,
+                  color: data.color,
+                  dayIndex: data.day_index,
+                  startTime: data.start_time,
+                  endTime: data.end_time,
+                }
+              : b
+          )
+        );
       }
     } else {
+      const newBlock: TTBlock = {
+        id: Date.now(),
+        name,
+        color,
+        dayIndex,
+        startTime,
+        endTime,
+      };
       setTimetableState((prev) => {
-        const updated = {
-          ...prev,
-          [key]: [...(prev[key] || []), { id: Date.now(), name, color }],
-        };
+        const updated = [...prev, newBlock];
         localStorage.setItem("synchro-tt", JSON.stringify(updated));
         return updated;
       });
     }
   };
 
-  const deleteBlock = async (key: string, id: number) => {
+  const deleteBlock = async (id: number) => {
     setTimetableState((prev) => {
-      const updated = {
-        ...prev,
-        [key]: (prev[key] || []).filter((b) => b.id !== id),
-      };
+      const updated = prev.filter((b) => b.id !== id);
       if (!user) localStorage.setItem("synchro-tt", JSON.stringify(updated));
       return updated;
     });

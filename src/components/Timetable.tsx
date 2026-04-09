@@ -3,9 +3,9 @@ import type { KeyboardEvent } from 'react';
 import type { TTBlock } from '../Types.ts';
 
 interface TimetableProps {
-  timetable: Record<string, TTBlock[]>;
-  onAddBlock: (key: string, name: string, color: string) => void;
-  onDeleteBlock: (key: string, id: number) => void;
+  timetable: TTBlock[];
+  onAddBlock: (dayIndex: number, startTime: string, endTime: string, name: string, color: string) => void;
+  onDeleteBlock: (id: number) => void;
 }
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -15,9 +15,18 @@ const TIMES = [
 ];
 const COLORS = ['#3d6b4f','#2563eb','#9333ea','#ea580c','#be185d','#0891b2','#b45309'];
 
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 export default function Timetable({ timetable, onAddBlock, onDeleteBlock }: TimetableProps) {
-  const [pendingKey, setPendingKey] = useState<string | null>(null);
+  const [pendingCell, setPendingCell] = useState<{ dayIndex: number; time: string } | null>(null);
   const [actName, setActName] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -26,22 +35,26 @@ export default function Timetable({ timetable, onAddBlock, onDeleteBlock }: Time
   const todayIdx = dow === 0 ? 6 : dow - 1;
 
   useEffect(() => {
-    if (pendingKey && inputRef.current) {
+    if (pendingCell && inputRef.current) {
       setTimeout(() => inputRef.current?.focus(), 50);
     }
-  }, [pendingKey]);
+  }, [pendingCell]);
 
-  const openModal = (key: string) => {
-    setPendingKey(key);
+  const openModal = (dayIndex: number, time: string) => {
+    setPendingCell({ dayIndex, time });
     setActName('');
+    setStartTime(time);
+    // Default end time to 1 hour later
+    const timeIdx = TIMES.indexOf(time);
+    setEndTime(timeIdx < TIMES.length - 1 ? TIMES[timeIdx + 1] : time);
     setSelectedColor(COLORS[0]);
   };
 
-  const closeModal = () => setPendingKey(null);
+  const closeModal = () => setPendingCell(null);
 
   const confirm = () => {
-    if (!actName.trim() || !pendingKey) return;
-    onAddBlock(pendingKey, actName.trim(), selectedColor);
+    if (!actName.trim() || !pendingCell) return;
+    onAddBlock(pendingCell.dayIndex, startTime, endTime, actName.trim(), selectedColor);
     closeModal();
   };
 
@@ -69,34 +82,52 @@ export default function Timetable({ timetable, onAddBlock, onDeleteBlock }: Time
               </tr>
             </thead>
             <tbody>
-              {TIMES.map(time => (
+              {TIMES.map((time, timeIdx) => (
                 <tr key={time}>
                   <td className="tt-time">{time}</td>
                   {DAYS.map((_, di) => {
-                    const key = `${di}-${time}`;
-                    const blocks = timetable[key] || [];
+                    // Check if this cell is occupied by a block starting earlier
+                    const blockInCell = timetable.find(b => {
+                      if (b.dayIndex !== di) return false;
+                      const startIdx = TIMES.indexOf(b.startTime);
+                      const endIdx = TIMES.indexOf(b.endTime);
+                      return timeIdx >= startIdx && timeIdx < endIdx;
+                    });
+
+                    // If cell is covered by a block starting earlier, skip rendering
+                    if (blockInCell && blockInCell.startTime !== time) {
+                      return null;
+                    }
+
+                    // Calculate rowspan if this is the start of a block
+                    let rowspan = 1;
+                    if (blockInCell) {
+                      const startIdx = TIMES.indexOf(blockInCell.startTime);
+                      const endIdx = TIMES.indexOf(blockInCell.endTime);
+                      rowspan = endIdx - startIdx;
+                    }
+
                     return (
                       <td
                         key={di}
                         className="tt-cell"
-                        onClick={() => openModal(key)}
+                        rowSpan={rowspan}
+                        onClick={() => openModal(di, time)}
                       >
-                        {blocks.map(b => (
+                        {blockInCell ? (
                           <div
-                            key={b.id}
                             className="tt-block"
-                            style={{ background: b.color }}
+                            style={{ background: blockInCell.color }}
                           >
-                            <span className="tt-block-name">{b.name}</span>
+                            <span className="tt-block-name">{blockInCell.name}</span>
                             <button
                               className="tt-block-del"
-                              onClick={e => { e.stopPropagation(); onDeleteBlock(key, b.id); }}
+                              onClick={e => { e.stopPropagation(); onDeleteBlock(blockInCell.id); }}
                             >
                               ✕
                             </button>
                           </div>
-                        ))}
-                        {blocks.length === 0 && (
+                        ) : (
                           <div className="tt-add-btn">+</div>
                         )}
                       </td>
@@ -111,7 +142,7 @@ export default function Timetable({ timetable, onAddBlock, onDeleteBlock }: Time
 
       {/* Modal */}
       <div
-        className={`modal-bg ${pendingKey ? 'open' : ''}`}
+        className={`modal-bg ${pendingCell ? 'open' : ''}`}
         onClick={e => { if (e.target === e.currentTarget) closeModal(); }}
       >
         <div className="modal">
@@ -127,6 +158,24 @@ export default function Timetable({ timetable, onAddBlock, onDeleteBlock }: Time
               placeholder="e.g. Gym, Study, Lunch…"
               style={{ width: '100%' }}
             />
+          </div>
+          <div className="form-row" style={{ marginBottom: 12 }}>
+            <div className="form-group">
+              <label className="form-label">Start time</label>
+              <select value={startTime} onChange={e => setStartTime(e.target.value)}>
+                {TIMES.map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">End time</label>
+              <select value={endTime} onChange={e => setEndTime(e.target.value)}>
+                {TIMES.map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
           </div>
           <div className="form-group">
             <label className="form-label">Colour</label>

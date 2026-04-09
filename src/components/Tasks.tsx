@@ -39,7 +39,9 @@ export default function Tasks({ tasks, categories, onAdd, onToggle, onDelete, on
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCatName, setNewCatName] = useState('');
   const [newCatColor, setNewCatColor] = useState(PRESET_COLORS[0]);
+  const [currentPage, setCurrentPage] = useState(1);
   const todayStr = new Date().toISOString().slice(0, 10);
+  const TASKS_PER_PAGE = 10;
 
   const allCategories: Category[] = [GENERAL_CATEGORY, ...categories];
 
@@ -51,7 +53,7 @@ export default function Tasks({ tasks, categories, onAdd, onToggle, onDelete, on
     onAdd(title.trim(), due, selectedCategoryId);
     setTitle('');
     setDue('');
-    setSelectedCategoryId('general');
+    // Keep the selected category instead of resetting to general
   };
 
   const handleKey = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -71,9 +73,36 @@ export default function Tasks({ tasks, categories, onAdd, onToggle, onDelete, on
     if (e.key === 'Escape') setShowNewCategory(false);
   };
 
-  const filteredTasks = filterCategoryId !== null
+  const filteredTasks = (filterCategoryId !== null
     ? tasks.filter((t) => (t.categoryId || 'general') === filterCategoryId)
-    : tasks;
+    : tasks
+  ).sort((a, b) => {
+    // Tasks without due dates go to the end
+    if (!a.due && !b.due) return 0;
+    if (!a.due) return 1;
+    if (!b.due) return -1;
+    // Sort by due date ascending (earliest first)
+    return a.due.localeCompare(b.due);
+  });
+
+  // Pagination
+  const totalPages = Math.ceil(filteredTasks.length / TASKS_PER_PAGE);
+
+  // Ensure current page is valid (in case tasks were deleted and we're on a page that no longer exists)
+  const validCurrentPage = Math.min(currentPage, Math.max(1, totalPages));
+  if (validCurrentPage !== currentPage && totalPages > 0) {
+    setCurrentPage(validCurrentPage);
+  }
+
+  const startIndex = (validCurrentPage - 1) * TASKS_PER_PAGE;
+  const endIndex = startIndex + TASKS_PER_PAGE;
+  const paginatedTasks = filteredTasks.slice(startIndex, endIndex);
+
+  // Reset to page 1 when filter changes
+  const handleFilterChange = (categoryId: string | null) => {
+    setFilterCategoryId(categoryId);
+    setCurrentPage(1);
+  };
 
   return (
     <div>
@@ -112,9 +141,12 @@ export default function Tasks({ tasks, categories, onAdd, onToggle, onDelete, on
                 <select
                   value={selectedCategoryId}
                   onChange={(e) => setSelectedCategoryId(e.target.value)}
+                  style={{ width: '160px' }}
                 >
                   {allCategories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name.length > 20 ? cat.name.slice(0, 20) + '...' : cat.name}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -132,7 +164,7 @@ export default function Tasks({ tasks, categories, onAdd, onToggle, onDelete, on
               </div>
             ) : (
               <div>
-                {filteredTasks.map((task) => {
+                {paginatedTasks.map((task) => {
                   const overdue = task.due && task.due < todayStr && !task.done;
                   const cat = getCategoryById(task.categoryId || 'general');
                   return (
@@ -172,6 +204,31 @@ export default function Tasks({ tasks, categories, onAdd, onToggle, onDelete, on
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+                <button
+                  className="btn btn-ghost"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={validCurrentPage === 1}
+                  style={{ padding: '6px 12px', opacity: validCurrentPage === 1 ? 0.5 : 1 }}
+                >
+                  Previous
+                </button>
+                <span style={{ fontSize: 13, color: 'var(--muted)' }}>
+                  Page {validCurrentPage} of {totalPages}
+                </span>
+                <button
+                  className="btn btn-ghost"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={validCurrentPage === totalPages}
+                  style={{ padding: '6px 12px', opacity: validCurrentPage === totalPages ? 0.5 : 1 }}
+                >
+                  Next
+                </button>
               </div>
             )}
           </div>
@@ -223,7 +280,7 @@ export default function Tasks({ tasks, categories, onAdd, onToggle, onDelete, on
             <div className="cat-filter-item-wrap">
               <button
                 className={`cat-filter-item${filterCategoryId === null ? ' active' : ''}`}
-                onClick={() => setFilterCategoryId(null)}
+                onClick={() => handleFilterChange(null)}
               >
                 <span className="cat-filter-dot" style={{ background: 'var(--muted)' }} />
                 <span className="cat-filter-name">All</span>
@@ -238,7 +295,7 @@ export default function Tasks({ tasks, categories, onAdd, onToggle, onDelete, on
                   <button
                     className={`cat-filter-item${isActive ? ' active' : ''}`}
                     style={isActive ? { color: cat.color } : {}}
-                    onClick={() => setFilterCategoryId(isActive ? null : cat.id)}
+                    onClick={() => handleFilterChange(isActive ? null : cat.id)}
                   >
                     <span className="cat-filter-dot" style={{ background: cat.color }} />
                     <span className="cat-filter-name">{cat.name}</span>

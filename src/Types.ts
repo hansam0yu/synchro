@@ -22,6 +22,9 @@ export interface Task {
     id: number;
     name: string;
     color: string;
+    dayIndex: number;
+    startTime: string;
+    endTime: string;
   }
   
   export interface User {
