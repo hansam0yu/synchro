@@ -36,6 +36,7 @@ export default function Tasks({ tasks, categories, onAdd, onToggle, onDelete, on
   const [due, setDue] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState('general');
   const [filterCategoryId, setFilterCategoryId] = useState<string | null>(null);
+  const [filterStatus, setFilterStatus] = useState<'all' | 'todo' | 'overdue'>('all');
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCatName, setNewCatName] = useState('');
   const [newCatColor, setNewCatColor] = useState(PRESET_COLORS[0]);
@@ -73,17 +74,30 @@ export default function Tasks({ tasks, categories, onAdd, onToggle, onDelete, on
     if (e.key === 'Escape') setShowNewCategory(false);
   };
 
-  const filteredTasks = (filterCategoryId !== null
-    ? tasks.filter((t) => (t.categoryId || 'general') === filterCategoryId)
-    : tasks
-  ).sort((a, b) => {
-    // Tasks without due dates go to the end
-    if (!a.due && !b.due) return 0;
-    if (!a.due) return 1;
-    if (!b.due) return -1;
-    // Sort by due date ascending (earliest first)
-    return a.due.localeCompare(b.due);
-  });
+  const filteredTasks = tasks
+    .filter((t) => {
+      // Apply category filter
+      if (filterCategoryId !== null && (t.categoryId || 'general') !== filterCategoryId) {
+        return false;
+      }
+
+      // Apply status filter
+      if (filterStatus === 'todo') {
+        return !t.done;
+      } else if (filterStatus === 'overdue') {
+        return t.due && t.due < todayStr && !t.done;
+      }
+
+      return true;
+    })
+    .sort((a, b) => {
+      // Tasks without due dates go to the end
+      if (!a.due && !b.due) return 0;
+      if (!a.due) return 1;
+      if (!b.due) return -1;
+      // Sort by due date ascending (earliest first)
+      return a.due.localeCompare(b.due);
+    });
 
   // Pagination
   const totalPages = Math.ceil(filteredTasks.length / TASKS_PER_PAGE);
@@ -101,6 +115,11 @@ export default function Tasks({ tasks, categories, onAdd, onToggle, onDelete, on
   // Reset to page 1 when filter changes
   const handleFilterChange = (categoryId: string | null) => {
     setFilterCategoryId(categoryId);
+    setCurrentPage(1);
+  };
+
+  const handleStatusFilterChange = (status: 'all' | 'todo' | 'overdue') => {
+    setFilterStatus(status);
     setCurrentPage(1);
   };
 
@@ -160,7 +179,13 @@ export default function Tasks({ tasks, categories, onAdd, onToggle, onDelete, on
           <div className="card">
             {filteredTasks.length === 0 ? (
               <div className="empty-state">
-                {filterCategoryId !== null ? 'No tasks in this category' : 'No tasks yet — add one above'}
+                {filterStatus === 'todo'
+                  ? 'No to-do tasks'
+                  : filterStatus === 'overdue'
+                  ? 'No overdue tasks'
+                  : filterCategoryId !== null
+                  ? 'No tasks in this category'
+                  : 'No tasks yet — add one above'}
               </div>
             ) : (
               <div>
@@ -234,89 +259,138 @@ export default function Tasks({ tasks, categories, onAdd, onToggle, onDelete, on
           </div>
         </div>
 
-        {/* Right column: category panel */}
-        <div className="tasks-cat-panel">
-          <button
-            className="btn-new-category"
-            onClick={() => setShowNewCategory((v) => !v)}
-          >
-            + New category
-          </button>
+        {/* Right column: category and status panels */}
+        <div style={{ width: 230, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* Category panel */}
+          <div className="tasks-cat-panel">
+            <button
+              className="btn-new-category"
+              onClick={() => setShowNewCategory((v) => !v)}
+            >
+              + New category
+            </button>
 
-          {showNewCategory && (
-            <div className="new-category-form">
-              <input
-                type="text"
-                placeholder="Category name…"
-                value={newCatName}
-                onChange={(e) => setNewCatName(e.target.value)}
-                onKeyDown={handleNewCatKey}
-                style={{ width: '100%' }}
-                autoFocus
-              />
-              <div className="color-picker" style={{ marginTop: 8 }}>
-                {PRESET_COLORS.map((color) => (
-                  <div
-                    key={color}
-                    className={`color-dot${newCatColor === color ? ' selected' : ''}`}
-                    style={{ background: color }}
-                    onClick={() => setNewCatColor(color)}
-                  />
-                ))}
-              </div>
-              <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-                <button className="btn btn-primary" style={{ flex: 1, padding: '7px 10px' }} onClick={handleAddCategory}>
-                  Create
-                </button>
-                <button className="btn btn-ghost" style={{ flex: 1, padding: '7px 10px' }} onClick={() => setShowNewCategory(false)}>
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="cat-filter-list">
-            {/* All */}
-            <div className="cat-filter-item-wrap">
-              <button
-                className={`cat-filter-item${filterCategoryId === null ? ' active' : ''}`}
-                onClick={() => handleFilterChange(null)}
-              >
-                <span className="cat-filter-dot" style={{ background: 'var(--muted)' }} />
-                <span className="cat-filter-name">All</span>
-              </button>
-              <span className="cat-filter-del-spacer" />
-            </div>
-
-            {allCategories.map((cat) => {
-              const isActive = filterCategoryId === cat.id;
-              return (
-                <div key={cat.id} className="cat-filter-item-wrap">
-                  <button
-                    className={`cat-filter-item${isActive ? ' active' : ''}`}
-                    style={isActive ? { color: cat.color } : {}}
-                    onClick={() => handleFilterChange(isActive ? null : cat.id)}
-                  >
-                    <span className="cat-filter-dot" style={{ background: cat.color }} />
-                    <span className="cat-filter-name">{cat.name}</span>
-                  </button>
-                  {cat.id !== 'general' ? (
-                    <button
-                      className="cat-filter-del"
-                      title={`Delete ${cat.name}`}
-                      onClick={() => {
-                        if (filterCategoryId === cat.id) setFilterCategoryId(null);
-                        onDeleteCategory(cat.id);
-                      }}
-                    >
-                      ×
-                    </button>
-                  ) : (
-                    <span className="cat-filter-del-spacer" />
-                  )}
+            {showNewCategory && (
+              <div className="new-category-form">
+                <input
+                  type="text"
+                  placeholder="Category name…"
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  onKeyDown={handleNewCatKey}
+                  style={{ width: '100%' }}
+                  autoFocus
+                />
+                <div className="color-picker" style={{ marginTop: 8 }}>
+                  {PRESET_COLORS.map((color) => (
+                    <div
+                      key={color}
+                      className={`color-dot${newCatColor === color ? ' selected' : ''}`}
+                      style={{ background: color }}
+                      onClick={() => setNewCatColor(color)}
+                    />
+                  ))}
                 </div>
-              );
-            })}
+                <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                  <button className="btn btn-primary" style={{ flex: 1, padding: '7px 10px' }} onClick={handleAddCategory}>
+                    Create
+                  </button>
+                  <button className="btn btn-ghost" style={{ flex: 1, padding: '7px 10px' }} onClick={() => setShowNewCategory(false)}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="cat-filter-list">
+              <div className="cat-filter-item-wrap">
+                <button
+                  className={`cat-filter-item${filterCategoryId === null ? ' active' : ''}`}
+                  onClick={() => handleFilterChange(null)}
+                >
+                  <span className="cat-filter-dot" style={{ background: 'var(--muted)' }} />
+                  <span className="cat-filter-name">All</span>
+                </button>
+                <span className="cat-filter-del-spacer" />
+              </div>
+
+              {allCategories.map((cat) => {
+                const isActive = filterCategoryId === cat.id;
+                return (
+                  <div key={cat.id} className="cat-filter-item-wrap">
+                    <button
+                      className={`cat-filter-item${isActive ? ' active' : ''}`}
+                      style={isActive ? { color: cat.color } : {}}
+                      onClick={() => handleFilterChange(isActive ? null : cat.id)}
+                    >
+                      <span className="cat-filter-dot" style={{ background: cat.color }} />
+                      <span className="cat-filter-name">{cat.name}</span>
+                    </button>
+                    {cat.id !== 'general' ? (
+                      <button
+                        className="cat-filter-del"
+                        title={`Delete ${cat.name}`}
+                        onClick={() => {
+                          if (filterCategoryId === cat.id) setFilterCategoryId(null);
+                          onDeleteCategory(cat.id);
+                        }}
+                      >
+                        ×
+                      </button>
+                    ) : (
+                      <span className="cat-filter-del-spacer" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Status Filters Panel - Separate card */}
+          <div className="tasks-cat-panel">
+            <div style={{
+              fontSize: 11,
+              fontWeight: 500,
+              color: 'var(--muted)',
+              letterSpacing: '0.3px',
+              marginBottom: 10
+            }}>
+              FILTER BY STATUS
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <div className="cat-filter-item-wrap">
+                <button
+                  className={`cat-filter-item${filterStatus === 'all' ? ' active' : ''}`}
+                  onClick={() => handleStatusFilterChange('all')}
+                >
+                  <span className="cat-filter-dot" style={{ background: 'var(--muted)' }} />
+                  <span className="cat-filter-name">All</span>
+                </button>
+                <span className="cat-filter-del-spacer" />
+              </div>
+
+              <div className="cat-filter-item-wrap">
+                <button
+                  className={`cat-filter-item${filterStatus === 'todo' ? ' active' : ''}`}
+                  onClick={() => handleStatusFilterChange('todo')}
+                >
+                  <span className="cat-filter-dot" style={{ background: '#3d6b4f' }} />
+                  <span className="cat-filter-name">To-Do</span>
+                </button>
+                <span className="cat-filter-del-spacer" />
+              </div>
+
+              <div className="cat-filter-item-wrap">
+                <button
+                  className={`cat-filter-item${filterStatus === 'overdue' ? ' active' : ''}`}
+                  onClick={() => handleStatusFilterChange('overdue')}
+                >
+                  <span className="cat-filter-dot" style={{ background: '#c0392b' }} />
+                  <span className="cat-filter-name">Overdue</span>
+                </button>
+                <span className="cat-filter-del-spacer" />
+              </div>
+            </div>
           </div>
         </div>
       </div>
